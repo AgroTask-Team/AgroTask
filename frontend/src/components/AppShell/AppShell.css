@@ -1,0 +1,76 @@
+.app-shell-page {
+  height: 100vh;
+  min-height: 100vh;
+  background: #f5f7fa;
+  overflow: hidden;
+}
+
+.app-shell-main {
+  margin-left: 260px;
+  height: 100vh;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-shell-content {
+  flex: 1;
+  min-height: 0;
+  margin-top: 78px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 24px 24px 72px;
+  box-sizing: border-box;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+.app-shell-overlay {
+  display: none;
+}
+
+@media (max-width: 1100px) {
+  .app-shell-main {
+    margin-left: 220px;
+  }
+
+  .app-shell-content {
+    padding: 22px 22px 56px;
+  }
+}
+
+@media (max-width: 900px) {
+  .app-shell-page {
+    min-height: 100dvh;
+    height: 100dvh;
+  }
+
+  .app-shell-main {
+    margin-left: 0;
+    min-height: 100dvh;
+    height: 100dvh;
+  }
+
+  .app-shell-content {
+    margin-top: 78px;
+    padding: 18px 18px calc(44px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .app-shell-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    border: none;
+    background: rgba(15, 23, 42, 0.38);
+    z-index: 34;
+    cursor: pointer;
+  }
+}
+
+@media (max-width: 640px) {
+  .app-shell-content {
+    padding: 16px 14px calc(40px + env(safe-area-inset-bottom, 0px));
+  }
+}

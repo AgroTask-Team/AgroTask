@@ -1,0 +1,181 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum AuthProvider {
+  LOCAL
+  GOOGLE
+}
+
+enum FarmMemberRole {
+  ADMIN
+  EMPLOYEE
+}
+
+enum FarmMemberStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  LATE
+}
+
+enum NotificationType {
+  TASK_LATE
+  TASK_DUE_TODAY
+  TASK_DUE_TOMORROW
+  TASK_ASSIGNED
+}
+
+model User {
+  id                     Int            @id @default(autoincrement())
+  name                   String
+  email                  String         @unique
+  password               String?
+  googleId               String?        @unique
+  authProvider           AuthProvider   @default(LOCAL)
+  avatarUrl              String?
+  status                 UserStatus     @default(ACTIVE)
+  passwordResetToken     String?
+  passwordResetExpiresAt DateTime?
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+
+  memberships            FarmMember[]
+  tasks                  Task[]         @relation("TaskResponsible")
+  histories              History[]
+  notifications          Notification[]
+
+  @@map("users")
+}
+
+model Farm {
+  id            Int            @id @default(autoincrement())
+  name          String
+  segment       String
+  inviteCode    String         @unique
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  members       FarmMember[]
+  tasks         Task[]
+  notifications Notification[]
+
+  @@map("farms")
+}
+
+model FarmMember {
+  id        Int              @id @default(autoincrement())
+  role      FarmMemberRole
+  status    FarmMemberStatus @default(ACTIVE)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  userId    Int              @unique
+  farmId    Int
+
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  farm      Farm             @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  @@index([farmId])
+  @@map("farm_members")
+}
+
+model Task {
+  id            Int            @id @default(autoincrement())
+  title         String
+  description   String
+  area          String?
+  priority      TaskPriority
+  deadline      DateTime
+  status        TaskStatus     @default(PENDING)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  farmId        Int
+  farm          Farm           @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  responsibleId Int
+  responsible   User           @relation("TaskResponsible", fields: [responsibleId], references: [id])
+
+  evidences     Evidence[]
+  histories     History[]
+  notifications Notification[]
+
+  @@index([farmId])
+  @@index([responsibleId])
+  @@map("tasks")
+}
+
+model Evidence {
+  id        Int      @id @default(autoincrement())
+  fileName  String
+  filePath  String
+  fileType  String?
+  note      String?
+  latitude  Float?
+  longitude Float?
+  createdAt DateTime @default(now())
+
+  taskId    Int
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@map("evidences")
+}
+
+model History {
+  id        Int      @id @default(autoincrement())
+  action    String
+  createdAt DateTime @default(now())
+
+  taskId    Int
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@map("histories")
+}
+
+model Notification {
+  id        Int              @id @default(autoincrement())
+  userId    Int
+  farmId    Int
+  taskId    Int
+  type      NotificationType
+  title     String
+  message   String
+  isRead    Boolean          @default(false)
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  farm      Farm             @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  task      Task             @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, taskId, type])
+  @@index([userId, farmId, isRead])
+  @@index([farmId, createdAt])
+  @@map("notifications")
+}

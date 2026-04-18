@@ -46,7 +46,10 @@ function TaskDetails() {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [downloadingEvidenceId, setDownloadingEvidenceId] = useState(null);
   const [reviewingCompletion, setReviewingCompletion] = useState(false);
+  const [rejectionFormOpen, setRejectionFormOpen] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState('');
   const [connectivity, setConnectivity] = useState(getConnectivitySnapshot());
+  const [showFullHistory, setShowFullHistory] = useState(false);
   const [showOfflineCacheMessage, setShowOfflineCacheMessage] = useState(false);
   const [offlineCacheTimestamp, setOfflineCacheTimestamp] = useState('');
   const [pendingStatusCount, setPendingStatusCount] = useState(
@@ -88,6 +91,144 @@ function TaskDetails() {
 
     return `Existem ${pendingStatusCount} atualizações de status pendentes de sincronização.`;
   }, [pendingStatusCount]);
+
+  const hasEvidenceRequirements = useMemo(() => {
+    return (
+      task?.requirePhotoEvidence ||
+      task?.requireNoteEvidence ||
+      task?.requireLocationEvidence
+    );
+  }, [task]);
+
+  const validationRequirementsCount = useMemo(() => {
+    if (!task) {
+      return 0;
+    }
+
+    return [
+      task.completionRequiresApproval,
+      task.requirePhotoEvidence,
+      task.requireNoteEvidence,
+      task.requireLocationEvidence,
+    ].filter(Boolean).length;
+  }, [task]);
+
+  const validationRequirementCards = useMemo(() => {
+    if (!task) {
+      return [];
+    }
+
+    return [
+      {
+        key: 'approval',
+        title: 'Aprovação do administrador',
+        description: task.completionRequiresApproval
+          ? 'A conclusão fica pendente até a revisão do administrador.'
+          : 'A conclusão pode seguir sem revisão adicional.',
+        enabled: Boolean(task.completionRequiresApproval),
+      },
+      {
+        key: 'photo',
+        title: 'Foto obrigatória',
+        description: task.requirePhotoEvidence
+          ? 'O funcionário precisa enviar foto como evidência de execução.'
+          : 'Foto não é obrigatória para esta tarefa.',
+        enabled: Boolean(task.requirePhotoEvidence),
+      },
+      {
+        key: 'note',
+        title: 'Observação obrigatória',
+        description: task.requireNoteEvidence
+          ? 'É necessário registrar uma observação ao concluir.'
+          : 'Observação não é obrigatória para esta tarefa.',
+        enabled: Boolean(task.requireNoteEvidence),
+      },
+      {
+        key: 'location',
+        title: 'Localização obrigatória',
+        description: task.requireLocationEvidence
+          ? 'É necessário capturar a localização da execução.'
+          : 'Localização não é obrigatória para esta tarefa.',
+        enabled: Boolean(task.requireLocationEvidence),
+      },
+    ];
+  }, [task]);
+
+  const completionReviewToneClass = useMemo(() => {
+    if (!task) {
+      return 'idle';
+    }
+
+    if (task.completionReviewStatusValue === 'PENDING') {
+      return 'pending';
+    }
+
+    if (task.completionReviewStatusValue === 'APPROVED') {
+      return 'approved';
+    }
+
+    if (task.completionReviewStatusValue === 'REJECTED') {
+      return 'returned';
+    }
+
+    return 'idle';
+  }, [task]);
+
+  const completionReviewTitle = useMemo(() => {
+    if (!task) {
+      return '';
+    }
+
+    if (task.completionReviewStatusValue === 'PENDING') {
+      return 'Conclusão aguardando validação';
+    }
+
+    if (task.completionReviewStatusValue === 'APPROVED') {
+      return 'Conclusão aprovada';
+    }
+
+    if (task.completionReviewStatusValue === 'REJECTED') {
+      return 'Conclusão devolvida para ajuste';
+    }
+
+    return 'Sem revisão ativa no momento';
+  }, [task]);
+
+  const completionReviewDescription = useMemo(() => {
+    if (!task) {
+      return '';
+    }
+
+    if (task.completionReviewStatusValue === 'PENDING') {
+      return 'A tarefa foi marcada para conclusão e está aguardando a decisão do administrador.';
+    }
+
+    if (task.completionReviewStatusValue === 'APPROVED') {
+      return 'A conclusão foi validada e a tarefa foi aceita dentro das regras definidas.';
+    }
+
+    if (task.completionReviewStatusValue === 'REJECTED') {
+      return 'A conclusão foi analisada e devolvida para que o responsável realize os ajustes necessários.';
+    }
+
+    return 'Ainda não existe uma revisão de conclusão em andamento para esta tarefa.';
+  }, [task]);
+
+
+  const visibleHistories = useMemo(() => {
+    const histories = Array.isArray(task?.histories) ? task.histories : [];
+
+    if (showFullHistory) {
+      return histories;
+    }
+
+    return histories.slice(0, 5);
+  }, [task, showFullHistory]);
+
+  const hasHiddenHistories = useMemo(() => {
+    const totalHistories = Array.isArray(task?.histories) ? task.histories.length : 0;
+    return totalHistories > 5;
+  }, [task]);
 
   const handleLogout = useCallback(() => {
     localStorage.removeItem('agrotask_token');
@@ -406,6 +547,8 @@ function TaskDetails() {
       setReviewingCompletion(true);
       setErrorMessage('');
       setSuccessFeedbackMessage('');
+      setRejectionFormOpen(false);
+      setRejectionReason('');
 
       const response = await api.post(`/tasks/${id}/review-completion`, {
         decision: 'APPROVE',
@@ -426,16 +569,24 @@ function TaskDetails() {
     }
   };
 
-  const handleRejectCompletion = async () => {
-    const reason = window.prompt(
-      'Informe o motivo da devolução para ajuste:'
-    );
+  const openRejectForm = () => {
+    setErrorMessage('');
+    setSuccessFeedbackMessage('');
+    setRejectionFormOpen(true);
+    setRejectionReason(task?.completionRejectionReason || '');
+  };
 
-    if (reason === null) {
+  const closeRejectForm = () => {
+    if (reviewingCompletion) {
       return;
     }
 
-    if (!reason.trim()) {
+    setRejectionFormOpen(false);
+    setRejectionReason('');
+  };
+
+  const handleRejectCompletion = async () => {
+    if (!rejectionReason.trim()) {
       setErrorMessage('Informe um motivo para devolver a conclusão.');
       return;
     }
@@ -447,12 +598,15 @@ function TaskDetails() {
 
       const response = await api.post(`/tasks/${id}/review-completion`, {
         decision: 'REJECT',
-        reason: reason.trim(),
+        reason: rejectionReason.trim(),
       });
 
       setSuccessFeedbackMessage(
         response.data.message || 'Conclusão devolvida para ajuste com sucesso.'
       );
+
+      setRejectionFormOpen(false);
+      setRejectionReason('');
 
       await loadTaskDetails();
     } catch (error) {
@@ -464,11 +618,6 @@ function TaskDetails() {
       setReviewingCompletion(false);
     }
   };
-
-  const hasEvidenceRequirements =
-    task?.requirePhotoEvidence ||
-    task?.requireNoteEvidence ||
-    task?.requireLocationEvidence;
 
   return (
     <AppShell title="Detalhes da Tarefa" pageClassName="task-details-page">
@@ -605,30 +754,44 @@ function TaskDetails() {
                   >
                     <span className="task-details-info-label">REGRAS DE VALIDAÇÃO</span>
 
-                    <div
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 10,
-                        color: '#475467',
-                        fontSize: 15,
-                        lineHeight: 1.6,
-                      }}
-                    >
-                      <span>
-                        {task.completionRequiresApproval
-                          ? 'A conclusão desta tarefa exige aprovação do administrador.'
-                          : 'A conclusão desta tarefa não exige aprovação adicional.'}
-                      </span>
+                    <div className="task-details-validation-block" style={{ padding: 0, border: 'none', background: 'transparent' }}>
+                      <div className="task-details-validation-summary">
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          <strong>Validação configurada para esta tarefa</strong>
+                          <span>
+                            As regras abaixo definem o que precisa ser atendido para que a conclusão seja aceita.
+                          </span>
+                        </div>
 
-                      {hasEvidenceRequirements ? (
-                        <span>
-                          Evidências obrigatórias:{' '}
-                          {task.evidenceRequirements.join(', ')}.
-                        </span>
-                      ) : (
-                        <span>Não há exigências específicas de evidência para a conclusão.</span>
-                      )}
+                        <div className="task-details-validation-count">
+                          {validationRequirementsCount > 0
+                            ? `${validationRequirementsCount} requisito${validationRequirementsCount > 1 ? 's' : ''}`
+                            : 'Sem requisitos extras'}
+                        </div>
+                      </div>
+
+                      <div className="task-details-validation-rule-list">
+                        {validationRequirementCards.map((requirement) => (
+                          <div
+                            key={requirement.key}
+                            className={`task-details-validation-rule-item ${
+                              requirement.enabled ? 'required' : 'disabled'
+                            }`}
+                          >
+                            <div className="task-details-validation-rule-content">
+                              <strong>{requirement.title}</strong>
+                              <span>{requirement.description}</span>
+                              <div
+                                className={`task-details-validation-rule-badge ${
+                                  requirement.enabled ? 'required' : 'optional'
+                                }`}
+                              >
+                                {requirement.enabled ? 'Obrigatório' : 'Não exigido'}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -636,59 +799,183 @@ function TaskDetails() {
 
               {task.completionRequiresApproval && (
                 <section className="task-details-card">
-                  <h3>Validação da conclusão</h3>
-
-                  <div className="task-details-empty-state" style={{ paddingTop: 0 }}>
-                    Status da validação: <strong>{task.completionReviewStatusLabel}</strong>
+                  <div className="task-details-section-header">
+                    <h3>Validação da conclusão</h3>
                   </div>
 
-                  {task.completionReviewedByName && (
-                    <div className="task-details-empty-state">
-                      Revisado por {task.completionReviewedByName} em {task.completionReviewedAtFull}.
-                    </div>
-                  )}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    <div className="task-details-review-block">
+                      <div className={`task-details-review-status ${completionReviewToneClass}`}>
+                        <div className="task-details-review-status-banner">
+                          {task.completionReviewStatusLabel}
+                        </div>
 
-                  {task.completionRejectionReason && (
-                    <div className="task-details-feedback error" style={{ marginTop: 16, marginBottom: 0 }}>
-                      Motivo da devolução: {task.completionRejectionReason}
-                    </div>
-                  )}
+                        <div className="task-details-review-status-body">
+                          <div className="task-details-review-status-title">
+                            {completionReviewTitle}
+                          </div>
 
-                  {task.canReviewCompletion && isAdmin && (
-                    <div className="task-details-actions" style={{ marginTop: 18 }}>
-                      <button
-                        type="button"
-                        className="task-details-action-item"
-                        onClick={handleApproveCompletion}
-                        disabled={reviewingCompletion}
-                        style={{
-                          border: 'none',
-                          cursor: reviewingCompletion ? 'not-allowed' : 'pointer',
-                          background: '#ecfdf3',
-                          color: '#166534',
-                        }}
-                      >
-                        <span>
-                          {reviewingCompletion ? 'Processando...' : 'Aprovar conclusão'}
-                        </span>
-                      </button>
+                          <div className="task-details-review-status-text">
+                            {completionReviewDescription}
+                          </div>
+                        </div>
 
-                      <button
-                        type="button"
-                        className="task-details-action-item"
-                        onClick={handleRejectCompletion}
-                        disabled={reviewingCompletion}
-                        style={{
-                          border: 'none',
-                          cursor: reviewingCompletion ? 'not-allowed' : 'pointer',
-                          background: '#fef2f2',
-                          color: '#b91c1c',
-                        }}
-                      >
-                        <span>Devolver para ajuste</span>
-                      </button>
+                        <div className="task-details-review-meta">
+                          <div className="task-details-review-meta-chip">
+                            Status da tarefa: {task.status}
+                          </div>
+
+                          {task.completionReviewedByName && (
+                            <div className="task-details-review-meta-chip">
+                              Revisado por {task.completionReviewedByName}
+                            </div>
+                          )}
+
+                          {task.completionReviewedAtFull && (
+                            <div className="task-details-review-meta-chip">
+                              {task.completionReviewedAtFull}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {task.completionRejectionReason && (
+                        <div className="task-details-review-reason">
+                          <span className="task-details-review-reason-label">
+                            Motivo da devolução
+                          </span>
+                          <p>{task.completionRejectionReason}</p>
+                        </div>
+                      )}
+
+                      {!task.completionRejectionReason &&
+                        task.completionReviewStatusValue !== 'PENDING' &&
+                        task.completionReviewStatusValue !== 'APPROVED' && (
+                          <div className="task-details-review-empty">
+                            <strong>Nenhum retorno registrado</strong>
+                            <span>
+                              Quando houver uma revisão, o histórico desta validação aparecerá aqui com mais clareza.
+                            </span>
+                          </div>
+                        )}
                     </div>
-                  )}
+
+                    {task.canReviewCompletion && isAdmin && (
+                      <div className="task-details-review-block">
+                        <div className="task-details-review-empty">
+                          <strong>Ações de validação</strong>
+                          <span>
+                            Revise a conclusão enviada pelo funcionário e escolha se deseja aprovar ou devolver para ajuste.
+                          </span>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                          <button
+                            type="button"
+                            className="task-details-primary-button"
+                            onClick={handleApproveCompletion}
+                            disabled={reviewingCompletion}
+                            style={{ width: '100%', minHeight: 52 }}
+                          >
+                            <span>
+                              {reviewingCompletion
+                                ? 'Processando...'
+                                : 'Aprovar conclusão'}
+                            </span>
+                          </button>
+
+                          {!rejectionFormOpen ? (
+                            <button
+                              type="button"
+                              className="task-details-outline-button"
+                              onClick={openRejectForm}
+                              disabled={reviewingCompletion}
+                              style={{
+                                width: '100%',
+                                minHeight: 52,
+                                color: '#b91c1c',
+                                borderColor: '#fecaca',
+                                background: '#fffafa',
+                              }}
+                            >
+                              <span>Devolver para ajuste</span>
+                            </button>
+                          ) : (
+                            <div
+                              className="task-details-review-reason"
+                              style={{
+                                borderColor: '#fecaca',
+                                background: '#fffafa',
+                                gap: 12,
+                              }}
+                            >
+                              <span className="task-details-review-reason-label">
+                                Motivo do ajuste
+                              </span>
+
+                              <textarea
+                                value={rejectionReason}
+                                onChange={(event) => setRejectionReason(event.target.value)}
+                                placeholder="Explique com clareza o que precisa ser ajustado para a conclusão ser aprovada."
+                                rows={4}
+                                disabled={reviewingCompletion}
+                                style={{
+                                  width: '100%',
+                                  resize: 'vertical',
+                                  minHeight: 110,
+                                  borderRadius: 14,
+                                  border: '1px solid #f3c2c2',
+                                  padding: '14px 16px',
+                                  boxSizing: 'border-box',
+                                  fontSize: 14,
+                                  lineHeight: 1.6,
+                                  color: '#344054',
+                                  background: '#ffffff',
+                                  outline: 'none',
+                                }}
+                              />
+
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  gap: 10,
+                                  flexWrap: 'wrap',
+                                }}
+                              >
+                                <button
+                                  type="button"
+                                  className="task-details-outline-button"
+                                  onClick={closeRejectForm}
+                                  disabled={reviewingCompletion}
+                                  style={{ minHeight: 48, minWidth: 120 }}
+                                >
+                                  <span>Cancelar</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className="task-details-primary-button"
+                                  onClick={handleRejectCompletion}
+                                  disabled={reviewingCompletion}
+                                  style={{
+                                    minHeight: 48,
+                                    minWidth: 180,
+                                    background: '#dc2626',
+                                  }}
+                                >
+                                  <span>
+                                    {reviewingCompletion
+                                      ? 'Enviando...'
+                                      : 'Confirmar devolução'}
+                                  </span>
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </section>
               )}
 
@@ -709,19 +996,42 @@ function TaskDetails() {
                     Nenhum histórico registrado.
                   </div>
                 ) : (
-                  <div className="task-details-history-list">
-                    {task.histories.map((history) => (
-                      <div className="task-details-history-item" key={history.id}>
-                        <span className="history-dot" />
-                        <div>
-                          <strong>{history.action}</strong>
-                          <span>
-                            {history.userName} · {history.createdAtFull}
-                          </span>
+                  <>
+                    <div className="task-details-history-list">
+                      {visibleHistories.map((history) => (
+                        <div className="task-details-history-item" key={history.id}>
+                          <span className="history-dot" />
+                          <div>
+                            <strong>{history.action}</strong>
+                            <span>
+                              {history.userName} · {history.createdAtFull}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+
+                    {hasHiddenHistories && (
+                      <button
+                        type="button"
+                        className="task-details-add-link"
+                        onClick={() => setShowFullHistory((currentValue) => !currentValue)}
+                        style={{
+                          marginTop: 18,
+                          background: 'transparent',
+                          border: 'none',
+                          padding: 0,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <span>
+                          {showFullHistory
+                            ? 'Mostrar menos alterações'
+                            : `Ver mais ${task.histories.length - visibleHistories.length} alterações`}
+                        </span>
+                      </button>
+                    )}
+                  </>
                 )}
               </section>
 
@@ -858,30 +1168,6 @@ function TaskDetails() {
                       </span>
                     </div>
                   </div>
-                </div>
-              </section>
-
-              <section className="task-details-card">
-                <h3>Ações rápidas</h3>
-
-                <div className="task-details-actions">
-                  <Link to={`/edit-task/${id}`} className="task-details-action-item">
-                    <img
-                      src={editTaskIcon}
-                      alt=""
-                      className="task-details-action-icon dark"
-                    />
-                    <span>{isAdmin ? 'Editar tarefa' : 'Atualizar status'}</span>
-                  </Link>
-
-                  <Link to={`/evidences/${id}`} className="task-details-action-item">
-                    <img
-                      src={evidencesIcon}
-                      alt=""
-                      className="task-details-action-icon"
-                    />
-                    <span>Gerenciar evidências</span>
-                  </Link>
                 </div>
               </section>
 

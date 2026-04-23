@@ -10,9 +10,9 @@ Sistema web de **gestão de tarefas rurais**, com foco em organização, execuç
 
 Antes de começar, você precisa ter instalado:
 
-* Git
-* Node.js + npm
-* Docker Desktop
+* Git  
+* Node.js + npm  
+* Docker Desktop  
 
 ---
 
@@ -20,57 +20,65 @@ Antes de começar, você precisa ter instalado:
 
 ### 1. Clone o repositório
 
-```bash
-git clone URL_DO_REPOSITORIO
-cd AgroTask
-```
+git clone URL_DO_REPOSITORIO  
+cd AgroTask  
 
 ---
 
-### 2. Crie os arquivos `.env`
+### 2. Crie os arquivos .env
 
 O projeto utiliza variáveis de ambiente no backend e no frontend.
 
 Crie os arquivos `.env` com base nos arquivos de exemplo:
 
-#### Linux / macOS
+Linux / macOS  
+cp backend/.env.example backend/.env  
+cp frontend/.env.example frontend/.env  
 
-```bash
-cp backend/.env.example backend/.env
-cp frontend/.env.example frontend/.env
-```
-
-#### Windows PowerShell
-
-```powershell
-Copy-Item backend/.env.example backend/.env
-Copy-Item frontend/.env.example frontend/.env
-```
+Windows PowerShell  
+Copy-Item backend/.env.example backend/.env  
+Copy-Item frontend/.env.example frontend/.env  
 
 ---
 
-### 3. Suba o backend + banco com Docker
+### 3. Suba o banco com Docker
 
-```bash
-docker compose up -d
-```
+docker compose up -d  
 
 ---
 
-### 4. Rode o frontend
+### 4. Configure o backend
 
-```bash
-cd frontend
-npm install
-npm run dev
-```
+Acesse a pasta do backend:
+
+cd backend  
+
+Configure o banco de dados no arquivo `.env` (backend), ajustando as credenciais conforme necessário.
+
+Caso ainda não tenha criado o banco, certifique-se de criá-lo antes de iniciar a aplicação.
+
+Gere o client do Prisma:
+
+npx prisma generate  
+
+Inicie o backend:
+
+npm run dev  
 
 ---
 
-### 5. Acesse o sistema
+### 5. Rode o frontend
 
-* Frontend: http://localhost:5173
-* Backend: http://localhost:3001
+cd frontend  
+npm install  
+npm run dev  
+
+---
+
+### 6. Acesse o sistema
+
+* Frontend: http://localhost:5173  
+* Backend: http://localhost:3001  
 
 ---
 
@@ -80,44 +88,39 @@ Os arquivos `.env.example` já possuem configurações básicas para ambiente lo
 
 Você pode rodar o sistema apenas copiando esses arquivos para `.env`.
 
-No entanto, sem alterar algumas variáveis, **algumas funcionalidades podem não funcionar corretamente**, como:
+No entanto, sem alterar algumas variáveis, algumas funcionalidades podem não funcionar corretamente, como:
 
-* login com Google
-* envio de e-mails (recuperação de senha)
+* Login com Google  
+* Envio de e-mails (recuperação de senha)  
 
-Mesmo assim, isso **não impede o uso geral do sistema para testes**, como:
+Mesmo assim, isso não impede o uso geral do sistema para testes, como:
 
-* login padrão
-* criação e gerenciamento de tarefas
-* navegação no sistema
+* Login padrão  
+* Criação e gerenciamento de tarefas  
+* Navegação no sistema  
 
 ---
 
 ## 🧪 Problemas comuns
 
-### Porta já está em uso
-
+* Porta já está em uso  
 Feche o processo que está usando a porta ou altere a configuração local.
 
-### Erro ao conectar no banco
-
+* Erro ao conectar no banco  
 Verifique se o Docker Desktop está rodando corretamente.
 
-### Frontend não conecta no backend
-
+* Frontend não conecta no backend  
 Confira se os arquivos `.env` foram criados corretamente.
 
 ---
 
 ## 📌 Estrutura do projeto
 
-```bash
-AgroTask/
-├── backend/
-├── frontend/
-├── docker-compose.yml
-└── README.md
-```
+AgroTask/  
+├── backend/  
+├── frontend/  
+├── docker-compose.yml  
+└── README.md  
 
 ---
 

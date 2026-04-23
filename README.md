@@ -19,10 +19,10 @@ Antes de começar, você precisa ter instalado:
 ## ⚙️ Passo a passo
 
 ### 1. Clone o repositório
-
+```bash
 git clone URL_DO_REPOSITORIO  
 cd AgroTask  
-
+```
 ---
 
 ### 2. Crie os arquivos .env
@@ -32,47 +32,49 @@ O projeto utiliza variáveis de ambiente no backend e no frontend.
 Crie os arquivos `.env` com base nos arquivos de exemplo:
 
 Linux / macOS  
+```bash
 cp backend/.env.example backend/.env  
 cp frontend/.env.example frontend/.env  
-
+```
 Windows PowerShell  
+```bash
 Copy-Item backend/.env.example backend/.env  
 Copy-Item frontend/.env.example frontend/.env  
-
+```
 ---
 
 ### 3. Suba o banco com Docker
-
+```bash
 docker compose up -d  
-
+```
 ---
 
 ### 4. Configure o backend
 
 Acesse a pasta do backend:
-
+```bash
 cd backend  
-
+```
 Configure o banco de dados no arquivo `.env` (backend), ajustando as credenciais conforme necessário.
 
 Caso ainda não tenha criado o banco, certifique-se de criá-lo antes de iniciar a aplicação.
 
 Gere o client do Prisma:
-
+```bash
 npx prisma generate  
-
+```
 Inicie o backend:
-
+```bash
 npm run dev  
-
+```
 ---
 
 ### 5. Rode o frontend
-
+```bash
 cd frontend  
 npm install  
 npm run dev  
-
+```
 ---
 
 ### 6. Acesse o sistema
@@ -115,13 +117,13 @@ Confira se os arquivos `.env` foram criados corretamente.
 ---
 
 ## 📌 Estrutura do projeto
-
+```bash
 AgroTask/  
 ├── backend/  
 ├── frontend/  
 ├── docker-compose.yml  
 └── README.md  
-
+```
 ---
 
 ## 👥 Sobre o projeto

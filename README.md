@@ -1,6 +1,6 @@
 # 🌱 AgroTask
 
-Sistema web de **gestão de tarefas rurais**, com foco em organização, execução, acompanhamento e validação de atividades no campo.
+Sistema web de **gestão de tarefas rurais**, com foco em organização, execução, acompanhamento e validação de atividades no campo. 
 
 ---
 

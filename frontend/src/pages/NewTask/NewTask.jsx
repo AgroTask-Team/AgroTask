@@ -23,6 +23,7 @@ function NewTask() {
     deadline: '',
     priority: 'MEDIUM',
     status: 'PENDING',
+    repeatWeekly: false,
     completionRequiresApproval: false,
     requirePhotoEvidence: false,
     requireNoteEvidence: false,
@@ -97,6 +98,7 @@ function NewTask() {
         deadline: formData.deadline,
         priority: formData.priority,
         status: formData.status,
+        repeatWeekly: formData.repeatWeekly,
         completionRequiresApproval: formData.completionRequiresApproval,
         requirePhotoEvidence: formData.requirePhotoEvidence,
         requireNoteEvidence: formData.requireNoteEvidence,
@@ -367,6 +369,19 @@ function NewTask() {
               </div>
 
               <div className="new-task-card-body">
+                <div className="new-task-field">
+                  <label className="new-task-validation-option">
+                    <input
+                      type="checkbox"
+                      checked={formData.repeatWeekly}
+                      onChange={(event) =>
+                        handleChange('repeatWeekly', event.target.checked)
+                      }
+                    />
+                    <span>Repetir semanalmente</span>
+                  </label>
+                </div>
+
                 <div className="new-task-field">
                   <label className="new-task-validation-option">
                     <input

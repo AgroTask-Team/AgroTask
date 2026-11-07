@@ -2,6 +2,8 @@ const fs = require('fs');
 const path = require('path');
 const prisma = require('../config/prisma');
 
+const { saveTaskAndSchedule } = require('../services/weeklyTaskService');
+
 const APP_TIME_ZONE = 'America/Sao_Paulo';
 const {
   createAssignedNotification,
@@ -315,6 +317,7 @@ function buildTaskResponse(task) {
     createdAtFull: formatDateTime(task.createdAt),
     updatedAt: formatDateTime(task.updatedAt),
 
+    repeatWeekly: task.repeatWeekly,
     completionRequiresApproval: Boolean(task.completionRequiresApproval),
     completionReviewStatus: task.completionReviewStatus,
     completionReviewStatusLabel: mapCompletionReviewStatus(task.completionReviewStatus),
@@ -752,36 +755,40 @@ async function createTask(req, res) {
       reviewerId: authenticatedUserId,
     });
 
-    const task = await prisma.task.create({
-      data: {
-        title: normalizedTitle,
-        description: normalizedDescription,
-        area: normalizedArea || null,
-        responsibleId: normalizedResponsibleId,
-        farmId,
-        deadline: normalizedDeadline,
-        priority: normalizedPriority,
-        status: normalizedStatus,
+    const task = await saveTaskAndSchedule(
+      (tx) => tx.task.create({
+        data: {
+          title: normalizedTitle,
+          description: normalizedDescription,
+          area: normalizedArea || null,
+          responsibleId: normalizedResponsibleId,
+          farmId,
+          deadline: normalizedDeadline,
+          priority: normalizedPriority,
+          status: normalizedStatus,
 
-        completionRequiresApproval: normalizedCompletionRequiresApproval,
-        completionReviewStatus: reviewData.completionReviewStatus,
-        completionReviewedAt: reviewData.completionReviewedAt,
-        completionReviewedById: reviewData.completionReviewedById,
-        completionRejectionReason: reviewData.completionRejectionReason,
+          repeatWeekly: parseBooleanValue(req.body.repeatWeekly),
+          completionRequiresApproval: normalizedCompletionRequiresApproval,
+          completionReviewStatus: reviewData.completionReviewStatus,
+          completionReviewedAt: reviewData.completionReviewedAt,
+          completionReviewedById: reviewData.completionReviewedById,
+          completionRejectionReason: reviewData.completionRejectionReason,
 
-        requirePhotoEvidence: normalizedRequirePhotoEvidence,
-        requireNoteEvidence: normalizedRequireNoteEvidence,
-        requireLocationEvidence: normalizedRequireLocationEvidence,
-      },
-      include: {
-        responsible: {
-          select: {
-            id: true,
-            name: true,
+          requirePhotoEvidence: normalizedRequirePhotoEvidence,
+          requireNoteEvidence: normalizedRequireNoteEvidence,
+          requireLocationEvidence: normalizedRequireLocationEvidence,
+        },
+        include: {
+          responsible: {
+            select: {
+              id: true,
+              name: true,
+            },
           },
         },
-      },
-    });
+      }),
+      authenticatedUserId
+    );
 
     if (authenticatedUserId) {
       const historyActions = [`Tarefa criada: ${task.title}`];
@@ -831,6 +838,7 @@ async function createTask(req, res) {
         deadline: task.deadline,
         priority: task.priority,
         status: task.status,
+        repeatWeekly: task.repeatWeekly,
         completionRequiresApproval: task.completionRequiresApproval,
         completionReviewStatus: task.completionReviewStatus,
         requirePhotoEvidence: task.requirePhotoEvidence,
@@ -840,6 +848,9 @@ async function createTask(req, res) {
       },
     });
   } catch (error) {
+    if (error.code === 'WEEKLY_RESPONSIBLE_INACTIVE') {
+      return res.status(409).json({ message: error.message });
+    }
     console.error('Erro ao criar tarefa:', error);
 
     return res.status(500).json({
@@ -943,6 +954,13 @@ async function updateTask(req, res) {
         });
       }
 
+      // Um reenvio offline pode chegar depois da aprovação da rotina.
+      if (normalizedStatus === 'COMPLETED' && existingTask.repeatWeekly &&
+          existingTask.status === 'COMPLETED' && existingTask.completionReviewStatus === 'APPROVED') {
+        const task = await getFullTaskById(taskId, farmId);
+        return res.status(200).json({ message: 'Conclusão já aprovada.', task: buildTaskResponse(task) });
+      }
+
       if (normalizedStatus === 'COMPLETED') {
         const missingRequirements = getMissingEvidenceRequirements(existingTask);
 
@@ -961,18 +979,25 @@ async function updateTask(req, res) {
         reviewerId: null,
       });
 
-      await prisma.task.update({
-        where: {
-          id: taskId,
-        },
-        data: {
-          status: normalizedStatus,
-          completionReviewStatus: reviewData.completionReviewStatus,
-          completionReviewedAt: reviewData.completionReviewedAt,
-          completionReviewedById: reviewData.completionReviewedById,
-          completionRejectionReason: reviewData.completionRejectionReason,
-        },
-      });
+      await saveTaskAndSchedule(
+        (tx) => tx.task.update({
+          where: {
+            id: taskId,
+            ...(normalizedStatus === 'COMPLETED' && {
+              NOT: { repeatWeekly: true, completionReviewStatus: 'APPROVED' },
+            }),
+          },
+          data: {
+            status: normalizedStatus,
+            completionReviewStatus: reviewData.completionReviewStatus,
+            completionReviewedAt: reviewData.completionReviewedAt,
+            completionReviewedById: reviewData.completionReviewedById,
+            completionRejectionReason: reviewData.completionRejectionReason,
+          },
+        }),
+        authenticatedUserId,
+        existingTask
+      );
 
       if (reviewData.completionReviewStatus === 'PENDING') {
         await createCompletionReviewPendingNotifications({
@@ -1122,30 +1147,37 @@ async function updateTask(req, res) {
       reviewerId: authenticatedUserId,
     });
 
-    await prisma.task.update({
-      where: {
-        id: taskId,
-      },
-      data: {
-        title: normalizedTitle,
-        description: normalizedDescription,
-        area: normalizedArea || null,
-        responsibleId: normalizedResponsibleId,
-        deadline: normalizedDeadline,
-        priority: normalizedPriority,
-        status: normalizedStatus,
+    await saveTaskAndSchedule(
+      (tx) => tx.task.update({
+        where: {
+          id: taskId,
+        },
+        data: {
+          title: normalizedTitle,
+          description: normalizedDescription,
+          area: normalizedArea || null,
+          responsibleId: normalizedResponsibleId,
+          deadline: normalizedDeadline,
+          priority: normalizedPriority,
+          status: normalizedStatus,
 
-        completionRequiresApproval: normalizedCompletionRequiresApproval,
-        completionReviewStatus: reviewData.completionReviewStatus,
-        completionReviewedAt: reviewData.completionReviewedAt,
-        completionReviewedById: reviewData.completionReviewedById,
-        completionRejectionReason: reviewData.completionRejectionReason,
+          repeatWeekly: req.body.repeatWeekly === undefined
+            ? undefined
+            : parseBooleanValue(req.body.repeatWeekly),
+          completionRequiresApproval: normalizedCompletionRequiresApproval,
+          completionReviewStatus: reviewData.completionReviewStatus,
+          completionReviewedAt: reviewData.completionReviewedAt,
+          completionReviewedById: reviewData.completionReviewedById,
+          completionRejectionReason: reviewData.completionRejectionReason,
 
-        requirePhotoEvidence: normalizedRequirePhotoEvidence,
-        requireNoteEvidence: normalizedRequireNoteEvidence,
-        requireLocationEvidence: normalizedRequireLocationEvidence,
-      },
-    });
+          requirePhotoEvidence: normalizedRequirePhotoEvidence,
+          requireNoteEvidence: normalizedRequireNoteEvidence,
+          requireLocationEvidence: normalizedRequireLocationEvidence,
+        },
+      }),
+      authenticatedUserId,
+      existingTask
+    );
 
     if (reviewData.completionReviewStatus !== 'PENDING') {
       await clearTaskCompletionPendingNotifications({ farmId, taskId });
@@ -1269,6 +1301,12 @@ async function updateTask(req, res) {
       task: buildTaskResponse(refreshedTask),
     });
   } catch (error) {
+    if (error.code === 'WEEKLY_RESPONSIBLE_INACTIVE') {
+      return res.status(409).json({ message: error.message });
+    }
+    if (error.code === 'P2025') {
+      return res.status(409).json({ message: 'A tarefa mudou. Recarregue antes de tentar novamente.' });
+    }
     console.error('Erro ao atualizar tarefa:', error);
 
     return res.status(500).json({
@@ -1336,19 +1374,25 @@ async function reviewTaskCompletion(req, res) {
     const nextReviewStatus =
       normalizedDecision === 'APPROVE' ? 'APPROVED' : 'REJECTED';
 
-    await prisma.task.update({
-      where: {
-        id: taskId,
-      },
-      data: {
-        status: nextStatus,
-        completionReviewStatus: nextReviewStatus,
-        completionReviewedAt: new Date(),
-        completionReviewedById: authenticatedUserId || null,
-        completionRejectionReason:
-          normalizedDecision === 'REJECT' ? normalizedReason : null,
-      },
-    });
+    await saveTaskAndSchedule(
+      (tx) => tx.task.update({
+        where: {
+          id: taskId,
+          status: 'COMPLETED',
+          completionReviewStatus: 'PENDING',
+        },
+        data: {
+          status: nextStatus,
+          completionReviewStatus: nextReviewStatus,
+          completionReviewedAt: new Date(),
+          completionReviewedById: authenticatedUserId || null,
+          completionRejectionReason:
+            normalizedDecision === 'REJECT' ? normalizedReason : null,
+        },
+      }),
+      authenticatedUserId,
+      task
+    );
 
     if (authenticatedUserId) {
       await prisma.history.create({
@@ -1392,6 +1436,12 @@ async function reviewTaskCompletion(req, res) {
       task: buildTaskResponse(refreshedTask),
     });
   } catch (error) {
+    if (error.code === 'WEEKLY_RESPONSIBLE_INACTIVE') {
+      return res.status(409).json({ message: error.message });
+    }
+    if (error.code === 'P2025') {
+      return res.status(409).json({ message: 'A tarefa mudou. Recarregue antes de tentar novamente.' });
+    }
     console.error('Erro ao revisar conclusão da tarefa:', error);
 
     return res.status(500).json({

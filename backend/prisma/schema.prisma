@@ -121,6 +121,11 @@ model Task {
   deadline    DateTime
   status      TaskStatus   @default(PENDING)
 
+  repeatWeekly         Boolean @default(false)
+  previousOccurrenceId Int?    @unique
+  previousOccurrence   Task?   @relation("WeeklyOccurrences", fields: [previousOccurrenceId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  nextOccurrence       Task?   @relation("WeeklyOccurrences")
+
   completionRequiresApproval Boolean                    @default(false)
   completionReviewStatus     TaskCompletionReviewStatus @default(NOT_REQUIRED)
   completionReviewedAt       DateTime?

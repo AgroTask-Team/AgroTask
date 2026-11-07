@@ -52,6 +52,7 @@ function EditTask() {
     deadline: '',
     priority: 'MEDIUM',
     status: 'PENDING',
+    repeatWeekly: false,
     completionRequiresApproval: false,
     requirePhotoEvidence: false,
     requireNoteEvidence: false,
@@ -142,6 +143,7 @@ function EditTask() {
       deadline: formatDateTimeLocal(task?.deadlineRaw || task?.deadlineIso || ''),
       priority: task?.priorityValue || 'MEDIUM',
       status: task?.statusValue || 'PENDING',
+      repeatWeekly: Boolean(task?.repeatWeekly),
       completionRequiresApproval: Boolean(task?.completionRequiresApproval),
       requirePhotoEvidence: Boolean(task?.requirePhotoEvidence),
       requireNoteEvidence: Boolean(task?.requireNoteEvidence),
@@ -302,6 +304,7 @@ function EditTask() {
             deadline: formData.deadline,
             priority: formData.priority,
             status: formData.status,
+            repeatWeekly: formData.repeatWeekly,
             completionRequiresApproval: formData.completionRequiresApproval,
             requirePhotoEvidence: formData.requirePhotoEvidence,
             requireNoteEvidence: formData.requireNoteEvidence,
@@ -672,6 +675,21 @@ function EditTask() {
                   </div>
 
                   <div className="edit-task-card-body">
+                    <div className="edit-task-field">
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <input
+                          type="checkbox"
+                          checked={formData.repeatWeekly}
+                          onChange={(event) =>
+                            handleChange('repeatWeekly', event.target.checked)
+                          }
+                          style={{ width: 18, height: 18 }}
+                          disabled={isAdminEditDisabled}
+                        />
+                        <span>Repetir semanalmente</span>
+                      </label>
+                    </div>
+
                     <div className="edit-task-field">
                       <label style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                         <input

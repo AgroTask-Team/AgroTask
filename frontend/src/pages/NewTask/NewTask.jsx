@@ -95,7 +95,7 @@ function NewTask() {
         description: formData.description,
         area: formData.area,
         responsibleId: Number(formData.responsibleId),
-        deadline: formData.deadline,
+        deadline: new Date(formData.deadline).toISOString(),
         priority: formData.priority,
         status: formData.status,
         repeatWeekly: formData.repeatWeekly,

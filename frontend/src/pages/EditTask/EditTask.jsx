@@ -141,8 +141,10 @@ function EditTask() {
       area: task?.area === 'Sem área informada' ? '' : task?.area || '',
       responsibleId: String(task?.responsible?.id || ''),
       deadline: formatDateTimeLocal(task?.deadlineRaw || task?.deadlineIso || ''),
+      originalDeadline: task?.deadlineRaw || task?.deadlineIso,
       priority: task?.priorityValue || 'MEDIUM',
       status: task?.statusValue || 'PENDING',
+      wasCompleted: task?.statusValue === 'COMPLETED',
       repeatWeekly: Boolean(task?.repeatWeekly),
       completionRequiresApproval: Boolean(task?.completionRequiresApproval),
       requirePhotoEvidence: Boolean(task?.requirePhotoEvidence),
@@ -301,7 +303,9 @@ function EditTask() {
             description: formData.description,
             area: formData.area,
             responsibleId: Number(formData.responsibleId),
-            deadline: formData.deadline,
+            deadline: formData.deadline === formatDateTimeLocal(formData.originalDeadline)
+              ? formData.originalDeadline
+              : new Date(formData.deadline).toISOString(),
             priority: formData.priority,
             status: formData.status,
             repeatWeekly: formData.repeatWeekly,
@@ -684,7 +688,7 @@ function EditTask() {
                             handleChange('repeatWeekly', event.target.checked)
                           }
                           style={{ width: 18, height: 18 }}
-                          disabled={isAdminEditDisabled}
+                          disabled={isAdminEditDisabled || formData.wasCompleted}
                         />
                         <span>Repetir semanalmente</span>
                       </label>

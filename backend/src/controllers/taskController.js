@@ -793,6 +793,10 @@ async function createTask(req, res) {
     if (authenticatedUserId) {
       const historyActions = [`Tarefa criada: ${task.title}`];
 
+      if (task.repeatWeekly) {
+        historyActions.push('Repetição semanal ativada');
+      }
+
       if (normalizedCompletionRequiresApproval) {
         historyActions.push('A tarefa foi configurada para exigir aprovação de conclusão');
       }
@@ -1127,6 +1131,16 @@ async function updateTask(req, res) {
       requireLocationEvidence: normalizedRequireLocationEvidence,
     };
 
+    const repeatWeekly = req.body.repeatWeekly === undefined
+      ? existingTask.repeatWeekly
+      : parseBooleanValue(req.body.repeatWeekly);
+    const recurrenceChanged = repeatWeekly !== existingTask.repeatWeekly;
+    if (recurrenceChanged && existingTask.status === 'COMPLETED') {
+      return res.status(409).json({
+        message: 'A repetição semanal só pode ser alterada em uma tarefa aberta.',
+      });
+    }
+
     if (normalizedStatus === 'COMPLETED') {
       const missingRequirements = getMissingEvidenceRequirements(
         draftTaskForValidation
@@ -1151,6 +1165,7 @@ async function updateTask(req, res) {
       (tx) => tx.task.update({
         where: {
           id: taskId,
+          ...(recurrenceChanged && { status: { not: 'COMPLETED' }, repeatWeekly: existingTask.repeatWeekly }),
         },
         data: {
           title: normalizedTitle,
@@ -1161,9 +1176,7 @@ async function updateTask(req, res) {
           priority: normalizedPriority,
           status: normalizedStatus,
 
-          repeatWeekly: req.body.repeatWeekly === undefined
-            ? undefined
-            : parseBooleanValue(req.body.repeatWeekly),
+          repeatWeekly: recurrenceChanged ? repeatWeekly : undefined,
           completionRequiresApproval: normalizedCompletionRequiresApproval,
           completionReviewStatus: reviewData.completionReviewStatus,
           completionReviewedAt: reviewData.completionReviewedAt,
@@ -1184,6 +1197,10 @@ async function updateTask(req, res) {
     }
 
     const historyChanges = [];
+
+    if (recurrenceChanged) {
+      historyChanges.push(repeatWeekly ? 'Repetição semanal ativada' : 'Repetição semanal desativada');
+    }
 
     if (existingTask.title !== normalizedTitle) {
       historyChanges.push(
@@ -1215,7 +1232,7 @@ async function updateTask(req, res) {
 
     if (new Date(existingTask.deadline).getTime() !== normalizedDeadline.getTime()) {
       historyChanges.push(
-        `Prazo alterado de ${formatDate(existingTask.deadline)} para ${formatDate(normalizedDeadline)}`
+        `Prazo alterado de ${formatDateTime(existingTask.deadline)} para ${formatDateTime(normalizedDeadline)}`
       );
     }
 
